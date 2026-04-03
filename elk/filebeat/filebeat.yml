@@ -1,10 +1,12 @@
 filebeat:
     image: docker.elastic.co/beats/filebeat:7.17.0
     user: root
+    # AJOUTE CETTE LIGNE CI-DESSOUS
+    command: ["--strict.perms=false"]
     volumes:
       - ./filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
       - ./dvwa-logs:/var/log/apache2:ro
     depends_on:
       - elasticsearch
     networks:
-      - security-net # <--- Indispensable pour communiquer avec ES
+      - security-net
