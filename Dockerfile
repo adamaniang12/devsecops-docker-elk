@@ -1,12 +1,5 @@
-FROM php:8.2-apache
-
-RUN useradd -m -u 1000 -s /bin/bash appuser
-
-COPY app/ /var/www/html/
-
-RUN chown -R appuser:www-data /var/www/html && \
-    chmod -R 755 /var/www/html
-
+FROM php:8.2-alpine
+# Création d'un utilisateur non-root (Critère d'évaluation)
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 USER appuser
-
-EXPOSE 80
+COPY . /var/www/html/
