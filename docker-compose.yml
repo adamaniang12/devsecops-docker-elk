@@ -1,0 +1,44 @@
+services:
+  dvwa:
+    image: vulnerables/web-dvwa
+    ports:
+      - "8080:80"
+    networks:
+      - security-net
+
+  secure-app:
+    build: .
+    ports:
+      - "8081:80"
+    networks:
+      - security-net
+
+  elasticsearch:
+    image: elasticsearch:7.17.0
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    ports:
+      - "9200:9200"
+    networks:
+      - security-net
+
+  kibana:
+    image: kibana:7.17.0
+    ports:
+      - "5601:5601"
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    depends_on:
+      - elasticsearch
+    networks:
+      - security-net
+
+networks:
+  security-net:
+    driver: bridge

@@ -1,0 +1,167 @@
+name: DevSecOps Pipeline CI/CD
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+env:
+  DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+  DOCKER_IMAGE: secure-app
+
+jobs:
+  # JOB 1: SAST - Analyse statique du code
+  sast:
+    name: SAST with Semgrep
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Semgrep Security Scan
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: |
+            p/php
+            p/security-audit
+          output: semgrep-results.json
+      
+      - name: Upload Semgrep Results
+        uses: actions/upload-artifact@v3
+        with:
+          name: sast-results
+          path: semgrep-results.json
+      
+      - name: Check for Critical Issues
+        run: |
+          if grep -q '"severity": "ERROR"' semgrep-results.json; then
+            echo "Critical security issues found!"
+            exit 1
+          fi
+
+  # JOB 2: Build Docker sécurisé
+  build:
+    name: Build Secure Docker Image
+    runs-on: ubuntu-latest
+    needs: sast
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Build Docker image
+        run: |
+          docker build -t ${{ env.DOCKER_IMAGE }}:latest .
+          docker tag ${{ env.DOCKER_IMAGE }}:latest ${{ env.DOCKER_IMAGE }}:${{ github.sha }}
+      
+      - name: Save Docker image
+        run: |
+          docker save ${{ env.DOCKER_IMAGE }}:latest -o image.tar
+      
+      - name: Upload Docker image
+        uses: actions/upload-artifact@v3
+        with:
+          name: docker-image
+          path: image.tar
+
+  # JOB 3: Scan Trivy (Block on CRITICAL)
+  trivy:
+    name: Vulnerability Scan with Trivy
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Download Docker image
+        uses: actions/download-artifact@v3
+        with:
+          name: docker-image
+      
+      - name: Load Docker image
+        run: docker load -i image.tar
+      
+      - name: Run Trivy scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.DOCKER_IMAGE }}:latest
+          format: 'html'
+          output: 'trivy-report.html'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+          exit-code: '1'  # Bloque le pipeline si vulnérabilités trouvées
+          ignore-unfixed: true
+      
+      - name: Upload Trivy Report
+        uses: actions/upload-artifact@v3
+        with:
+          name: trivy-report
+          path: trivy-report.html
+
+  # JOB 4: Publication Nexus
+  nexus:
+    name: Publish to Nexus
+    runs-on: ubuntu-latest
+    needs: trivy
+    steps:
+      - name: Download Trivy Report
+        uses: actions/download-artifact@v3
+        with:
+          name: trivy-report
+      
+      - name: Upload to Nexus
+        env:
+          NEXUS_URL: ${{ secrets.NEXUS_URL }}
+          NEXUS_USER: ${{ secrets.NEXUS_USER }}
+          NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
+        run: |
+          TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+          curl -v -u $NEXUS_USER:$NEXUS_PASSWORD \
+            --upload-file trivy-report.html \
+            "$NEXUS_URL/repository/reports/trivy-report-$TIMESTAMP.html" || \
+            echo "Nexus upload skipped (no credentials)"
+
+  # JOB 5: Push to DockerHub
+  dockerhub:
+    name: Push to DockerHub
+    runs-on: ubuntu-latest
+    needs: [trivy, nexus]
+    if: success()
+    steps:
+      - name: Download Docker image
+        uses: actions/download-artifact@v3
+        with:
+          name: docker-image
+      
+      - name: Load Docker image
+        run: docker load -i image.tar
+      
+      - name: Login to DockerHub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
+      
+      - name: Push to DockerHub
+        run: |
+          docker tag ${{ env.DOCKER_IMAGE }}:latest ${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE }}:latest
+          docker tag ${{ env.DOCKER_IMAGE }}:latest ${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE }}:${{ github.sha }}
+          docker push ${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE }}:latest
+          docker push ${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE }}:${{ github.sha }}
+      
+      - name: Scan pushed image
+        run: |
+          docker run --rm aquasec/trivy image ${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE }}:latest
+
+  # JOB 6: Notification
+  notify:
+    name: Notification
+    runs-on: ubuntu-latest
+    needs: [dockerhub]
+    if: always()
+    steps:
+      - name: Pipeline Status
+        run: |
+          if [ "${{ needs.dockerhub.result }}" == "success" ]; then
+            echo "✅ Pipeline DevSecOps réussi!"
+            echo "Image publiée avec succès"
+          else
+            echo "❌ Pipeline échoué - Sécurité non validée"
+            exit 1
+          fi
