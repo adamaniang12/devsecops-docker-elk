@@ -17,7 +17,7 @@ jobs:
 
     # JOB 2 : Build de l'image sécurisée
     - name: Build Secure Docker Image
-      run: docker build -t adamanian12/secure-app:latest -f Dockerfile .
+      run: docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/secure-app:latest .
 
     # JOB 3 : Scan Trivy (Bloque si CRITICAL)
     - name: Vulnerability Scan with Trivy
