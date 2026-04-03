@@ -1,10 +1,10 @@
-filebeat.inputs:
-- type: log
-  enabled: true
-  paths:
-    - /var/log/apache2/*.log
-  fields:
-    type: dvwa
-
-output.elasticsearch:
-  hosts: ["http://elasticsearch:9200"]
+filebeat:
+    image: docker.elastic.co/beats/filebeat:7.17.0
+    user: root
+    volumes:
+      - ./filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - ./dvwa-logs:/var/log/apache2:ro
+    depends_on:
+      - elasticsearch
+    networks:
+      - security-net # <--- Indispensable pour communiquer avec ES
