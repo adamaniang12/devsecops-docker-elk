@@ -1,30 +1,10 @@
 filebeat.inputs:
-- type: docker
-  containers.ids:
-    - "*"
-  processors:
-    - add_docker_metadata: ~
-  
-- type: filestream
-  id: dvwa-logs
+- type: log
+  enabled: true
   paths:
-    - /var/lib/docker/containers/*/*.log
-  parsers:
-    - ndjson:
-        target: docker
-  processors:
-    - add_docker_metadata:
-        host: "unix:///var/run/docker.sock"
+    - /var/log/apache2/*.log
+  fields:
+    type: dvwa
 
-filebeat.config.modules:
-  path: ${path.config}/modules.d/*.yml
-  reload.enabled: true
-
-setup.template.settings:
-  index.number_of_shards: 1
-  index.number_of_replicas: 0
-
-output.logstash:
-  hosts: ["logstash:5044"]
-
-logging.level: info
+output.elasticsearch:
+  hosts: ["http://elasticsearch:9200"]

@@ -1,8 +1,5 @@
-# Fichier app/index.php
-@'
 <?php
 session_start();
-
 if (!isset($_SESSION['attempts'])) {
     $_SESSION['attempts'] = 0;
     $_SESSION['last_attempt'] = time();
@@ -66,4 +63,3 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </div>
 </body>
 </html>
-'@ | Out-File -FilePath app\index.php -Encoding UTF8

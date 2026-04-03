@@ -1,5 +1,4 @@
-# Fichier app/dashboard.php
-@'
+
 <?php
 session_start();
 if (!isset($_SESSION['user'])) {
@@ -17,4 +16,3 @@ if (!isset($_SESSION['user'])) {
     <a href="logout.php">Logout</a>
 </body>
 </html>
-'@ | Out-File -FilePath app\dashboard.php -Encoding UTF8
